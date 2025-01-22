@@ -34,7 +34,7 @@ public class OrderController {
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = OrderDTO.class),
-                            examples = @ExampleObject(value = "[{\"id\": 1, \"title\": \"Task 1\", \"description\": \"Description of task 1\", \"status\": \"PENDING\", \"userId\": 1}]")
+                            examples = @ExampleObject(value = "[{\"id\": 1, \"userId\": \"1\", \"status\": \"PENDING\"}]")
                     )
             )
     })
