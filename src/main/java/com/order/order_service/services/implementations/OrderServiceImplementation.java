@@ -60,11 +60,10 @@ public class OrderServiceImplementation implements OrderService {
 
     @Override
     public ResponseEntity<OrderCreateWrapperRecord> createOrder(CreateOrderRecord newOrder) throws IllegalAttributeException, OrderException {
-        String userServiceUrl = USER_SERVICE_URL + "/email/" + newOrder.email();
-        try {
-            Long userId = getUserIdFromEmail(newOrder.email());
+        Long userId = getUserIdFromEmail(newOrder.email());
+        HttpEntity<List<ProductQuantityRecord>> requestEntity = new HttpEntity<>(newOrder.recordList());
 
-            HttpEntity<List<ProductQuantityRecord>> requestEntity = new HttpEntity<>(newOrder.recordList());
+        try {
             ResponseEntity<List<ExistentProductsRecord>> responseEntity = restTemplate.exchange(
                     PRODUCT_SERVICE_URL,
                     HttpMethod.PUT,
