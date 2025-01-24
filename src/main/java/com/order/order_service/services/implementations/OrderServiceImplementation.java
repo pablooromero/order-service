@@ -1,16 +1,29 @@
 package com.order.order_service.services.implementations;
 
+import com.order.order_service.dtos.CreateOrderRecord;
+import com.order.order_service.dtos.ExistentProductsRecord;
 import com.order.order_service.dtos.OrderDTO;
+import com.order.order_service.dtos.ProductQuantityRecord;
+import com.order.order_service.enums.OrderStatusEnum;
 import com.order.order_service.exceptions.IllegalAttributeException;
 import com.order.order_service.exceptions.OrderNotFoundException;
 import com.order.order_service.models.OrderEntity;
+import com.order.order_service.models.OrderItem;
+import com.order.order_service.repositories.OrderItemRepository;
 import com.order.order_service.repositories.OrderRepository;
 import com.order.order_service.services.OrderService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -19,6 +32,18 @@ public class OrderServiceImplementation implements OrderService {
 
     @Autowired
     private OrderRepository orderRepository;
+
+    @Autowired
+    private OrderItemRepository orderItemRepository;
+
+    @Autowired
+    private RestTemplate restTemplate;
+
+    @Value("${USER_SERVICE_URL}")
+    private String USER_SERVICE_URL;
+
+    @Value("${PRODUCT_SERVICE_URL}")
+    private String PRODUCT_SERVICE_URL;
 
 
     @Override
@@ -36,16 +61,45 @@ public class OrderServiceImplementation implements OrderService {
     }
 
     @Override
-    public ResponseEntity<OrderDTO> createOrder(OrderDTO orderDTO) throws IllegalAttributeException {
-        validateOrder(orderDTO);
+    public ResponseEntity<OrderDTO> createOrder(CreateOrderRecord newOrder) throws IllegalAttributeException {
+        String url = USER_SERVICE_URL + "/email/" + newOrder.email();
+        try{
+            System.out.println(url);
+            Long userId = restTemplate.getForObject(url, Long.class);
 
-        OrderEntity orderEntity = new OrderEntity();
-        orderEntity.setStatus(orderDTO.getStatus());
-        orderEntity.setUserId(orderDTO.getUserId());
+            ParameterizedTypeReference<List<ExistentProductsRecord>> responseType =
+                    new ParameterizedTypeReference<>() {};
 
-        OrderEntity savedOrderEntity = saveOrder(orderEntity);
-        return new ResponseEntity<>(new OrderDTO(savedOrderEntity), HttpStatus.CREATED);
+            HttpEntity<List<ProductQuantityRecord>> httpEntity = new HttpEntity<>(newOrder.recordList());
+            ResponseEntity<List<ExistentProductsRecord>> responseEntity = restTemplate.exchange(PRODUCT_SERVICE_URL, HttpMethod.PUT ,httpEntity, responseType);
+
+            OrderEntity order = new OrderEntity(userId, OrderStatusEnum.PENDING, null);
+            orderRepository.save(order);
+
+            generateOrderItemList(responseEntity.getBody(), order);
+
+            orderRepository.save(order);
+            OrderDTO orderDTO = new OrderDTO(order);
+
+            return new ResponseEntity<>(orderDTO, HttpStatus.CREATED);
+        } catch (Exception e){
+            System.out.println(e.getMessage());
+            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+        }
     }
+
+    private void generateOrderItemList(List<ExistentProductsRecord> productQuantityList, OrderEntity order){
+        List<OrderItem> orderItemList = new ArrayList<>();
+        Iterator<ExistentProductsRecord> it = productQuantityList.iterator();
+        while (it.hasNext()){
+            ExistentProductsRecord aux = it.next();
+            OrderItem orderItem = new OrderItem(aux.id(), aux.quantity(), order);
+            orderItemRepository.save(orderItem);
+            orderItemList.add(orderItem);
+        }
+        order.setProducts(orderItemList);
+    }
+
 
     @Override
     public ResponseEntity<OrderDTO> updateOrder(Long id, OrderDTO orderDTO) throws OrderNotFoundException, IllegalAttributeException {
@@ -80,4 +134,5 @@ public class OrderServiceImplementation implements OrderService {
             throw new IllegalAttributeException("Status cannot be null or empty");
         }
     }
+
 }

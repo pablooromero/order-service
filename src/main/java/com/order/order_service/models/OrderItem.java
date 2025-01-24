@@ -12,9 +12,19 @@ public class OrderItem {
     private Long productId;
     private Integer quantity;
 
+    public OrderItem(Long productId, Integer quantity, OrderEntity order) {
+        this.productId = productId;
+        this.quantity = quantity;
+        this.order = order;
+    }
+
     @ManyToOne
     @JoinColumn(name = "order_entity_id")
     private OrderEntity order;
+
+    public OrderItem() {
+
+    }
 
     public Long getId() {
         return id;

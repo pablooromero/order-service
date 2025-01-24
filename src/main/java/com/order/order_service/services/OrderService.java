@@ -1,5 +1,6 @@
 package com.order.order_service.services;
 
+import com.order.order_service.dtos.CreateOrderRecord;
 import com.order.order_service.dtos.OrderDTO;
 import com.order.order_service.exceptions.IllegalAttributeException;
 import com.order.order_service.exceptions.OrderNotFoundException;
@@ -14,7 +15,7 @@ public interface OrderService {
 
     OrderEntity saveOrder(OrderEntity orderEntity);
 
-    ResponseEntity<OrderDTO> createOrder(OrderDTO orderDTO) throws IllegalAttributeException;
+    ResponseEntity<OrderDTO> createOrder(CreateOrderRecord createOrderRecord) throws IllegalAttributeException;
 
     ResponseEntity<OrderDTO> updateOrder(Long id, OrderDTO orderDTO) throws OrderNotFoundException, IllegalArgumentException;
 

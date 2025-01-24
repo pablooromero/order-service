@@ -1,5 +1,6 @@
 package com.order.order_service.controllers;
 
+import com.order.order_service.dtos.CreateOrderRecord;
 import com.order.order_service.dtos.OrderDTO;
 import com.order.order_service.dtos.OrderItemDTO;
 import com.order.order_service.exceptions.OrderNotFoundException;
@@ -56,8 +57,8 @@ public class OrderController {
             )
     })
     @PostMapping
-    public ResponseEntity<OrderDTO> createOrder(@RequestBody OrderDTO orderDTO) {
-        return orderService.createOrder(orderDTO);
+    public ResponseEntity<OrderDTO> createOrder(@RequestBody CreateOrderRecord createOrderRecord) {
+        return orderService.createOrder(createOrderRecord);
     }
 
 

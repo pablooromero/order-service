@@ -20,7 +20,15 @@ public class OrderEntity {
     private OrderStatusEnum status;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
-    private Set<OrderItem> products = new HashSet<>();
+    private List<OrderItem> products;
+
+    public OrderEntity(Long userId, OrderStatusEnum status, List<OrderItem> products) {
+        this.userId = userId;
+        this.status = status;
+        this.products = products;
+    }
+
+    public OrderEntity() {}
 
     public Long getId() {
         return id;
@@ -42,11 +50,11 @@ public class OrderEntity {
         this.status = status;
     }
 
-    public Set<OrderItem> getProducts() {
+    public List<OrderItem> getProducts() {
         return products;
     }
 
-    public void setProducts(Set<OrderItem> products) {
+    public void setProducts(List<OrderItem> products) {
         this.products = products;
     }
 

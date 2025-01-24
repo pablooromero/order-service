@@ -20,31 +20,4 @@ public class OrderServiceApplication {
 		SpringApplication.run(OrderServiceApplication.class, args);
 	}
 
-	@Bean
-	public CommandLineRunner init(OrderRepository orderRepository, OrderItemRepository orderItemRepository) {
-		return args -> {
-
-			OrderEntity order = new OrderEntity();
-			order.setStatus(OrderStatusEnum.PENDING);
-			order.setUserId(1L);
-			orderRepository.save(order);
-
-			OrderItem item1 = new OrderItem();
-			item1.setProductId(1L);
-			item1.setQuantity(2);
-
-			order.addProduct(item1);
-			orderItemRepository.save(item1);
-
-			OrderItem item2 = new OrderItem();
-			item2.setProductId(2L);
-			item2.setQuantity(1);
-
-			order.addProduct(item2);
-			orderItemRepository.save(item2);
-
-			System.out.println("Order with products initialized successfully!");
-		};
-	}
-
 }
