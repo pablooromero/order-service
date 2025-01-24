@@ -20,6 +20,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
@@ -62,44 +64,46 @@ public class OrderServiceImplementation implements OrderService {
 
     @Override
     public ResponseEntity<OrderDTO> createOrder(CreateOrderRecord newOrder) throws IllegalAttributeException {
-        String url = USER_SERVICE_URL + "/email/" + newOrder.email();
-        try{
-            System.out.println(url);
-            Long userId = restTemplate.getForObject(url, Long.class);
+        String userServiceUrl = USER_SERVICE_URL + "/email/" + newOrder.email();
+        try {
+            Long userId = restTemplate.getForObject(userServiceUrl, Long.class);
 
-            ParameterizedTypeReference<List<ExistentProductsRecord>> responseType =
-                    new ParameterizedTypeReference<>() {};
-
-            HttpEntity<List<ProductQuantityRecord>> httpEntity = new HttpEntity<>(newOrder.recordList());
-            ResponseEntity<List<ExistentProductsRecord>> responseEntity = restTemplate.exchange(PRODUCT_SERVICE_URL, HttpMethod.PUT ,httpEntity, responseType);
+            HttpEntity<List<ProductQuantityRecord>> requestEntity = new HttpEntity<>(newOrder.recordList());
+            ResponseEntity<List<ExistentProductsRecord>> responseEntity = restTemplate.exchange(
+                    PRODUCT_SERVICE_URL,
+                    HttpMethod.PUT,
+                    requestEntity,
+                    new ParameterizedTypeReference<>() {
+                    }
+            );
 
             OrderEntity order = new OrderEntity(userId, OrderStatusEnum.PENDING, null);
             orderRepository.save(order);
 
-            generateOrderItemList(responseEntity.getBody(), order);
-
+            List<OrderItem> orderItems = generateOrderItems(responseEntity.getBody(), order);
+            order.setProducts(orderItems);
             orderRepository.save(order);
+
             OrderDTO orderDTO = new OrderDTO(order);
-
-            return new ResponseEntity<>(orderDTO, HttpStatus.CREATED);
-        } catch (Exception e){
-            System.out.println(e.getMessage());
-            return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+            return ResponseEntity.status(HttpStatus.CREATED).body(orderDTO);
+        } catch (HttpClientErrorException | HttpServerErrorException ex) {
+            System.err.println("Error al comunicarse con el servicio externo: " + ex.getMessage());
+            return ResponseEntity.status(ex.getStatusCode()).build();
+        } catch (Exception ex) {
+            System.err.println("Error inesperado: " + ex.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
-    private void generateOrderItemList(List<ExistentProductsRecord> productQuantityList, OrderEntity order){
-        List<OrderItem> orderItemList = new ArrayList<>();
-        Iterator<ExistentProductsRecord> it = productQuantityList.iterator();
-        while (it.hasNext()){
-            ExistentProductsRecord aux = it.next();
-            OrderItem orderItem = new OrderItem(aux.id(), aux.quantity(), order);
+    private List<OrderItem> generateOrderItems(List<ExistentProductsRecord> productRecords, OrderEntity order) {
+        List<OrderItem> orderItems = new ArrayList<>();
+        for (ExistentProductsRecord record : productRecords) {
+            OrderItem orderItem = new OrderItem(record.id(), record.quantity(), order);
             orderItemRepository.save(orderItem);
-            orderItemList.add(orderItem);
+            orderItems.add(orderItem);
         }
-        order.setProducts(orderItemList);
+        return orderItems;
     }
-
 
     @Override
     public ResponseEntity<OrderDTO> updateOrder(Long id, OrderDTO orderDTO) throws OrderNotFoundException, IllegalAttributeException {
