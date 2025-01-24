@@ -22,4 +22,12 @@ public class ExceptionHandlers {
     public ResponseEntity<String> illegalAttributeException(IllegalAttributeException e) {
         return new ResponseEntity<>(e.getMessage(), HttpStatus.BAD_REQUEST);
     }
+
+    @ExceptionHandler(OrderException.class)
+    public ResponseEntity<String> orderExceptionHandler(OrderException orderException){
+        if (orderException.getHttpStatus()!=null)
+            return new ResponseEntity<>(orderException.getMessage(), orderException.getHttpStatus());
+        else
+            return new ResponseEntity<>(orderException.getMessage(), HttpStatus.BAD_REQUEST);
+    }
 }

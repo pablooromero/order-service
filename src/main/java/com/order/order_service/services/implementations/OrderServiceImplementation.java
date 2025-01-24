@@ -1,11 +1,10 @@
 package com.order.order_service.services.implementations;
 
-import com.order.order_service.dtos.CreateOrderRecord;
-import com.order.order_service.dtos.ExistentProductsRecord;
-import com.order.order_service.dtos.OrderDTO;
-import com.order.order_service.dtos.ProductQuantityRecord;
+import com.order.order_service.dtos.*;
 import com.order.order_service.enums.OrderStatusEnum;
+import com.order.order_service.enums.ProductErrorEnum;
 import com.order.order_service.exceptions.IllegalAttributeException;
+import com.order.order_service.exceptions.OrderException;
 import com.order.order_service.exceptions.OrderNotFoundException;
 import com.order.order_service.models.OrderEntity;
 import com.order.order_service.models.OrderItem;
@@ -20,12 +19,9 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.HttpServerErrorException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.*;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -63,10 +59,10 @@ public class OrderServiceImplementation implements OrderService {
     }
 
     @Override
-    public ResponseEntity<OrderDTO> createOrder(CreateOrderRecord newOrder) throws IllegalAttributeException {
+    public ResponseEntity<OrderCreateWrapperRecord> createOrder(CreateOrderRecord newOrder) throws IllegalAttributeException, OrderException {
         String userServiceUrl = USER_SERVICE_URL + "/email/" + newOrder.email();
         try {
-            Long userId = restTemplate.getForObject(userServiceUrl, Long.class);
+            Long userId = getUserIdFromEmail(newOrder.email());
 
             HttpEntity<List<ProductQuantityRecord>> requestEntity = new HttpEntity<>(newOrder.recordList());
             ResponseEntity<List<ExistentProductsRecord>> responseEntity = restTemplate.exchange(
@@ -84,25 +80,67 @@ public class OrderServiceImplementation implements OrderService {
             order.setProducts(orderItems);
             orderRepository.save(order);
 
+            List<ErrorProductRecord> errorList = generateErrorProductsList(newOrder.recordList(), responseEntity.getBody());
+
             OrderDTO orderDTO = new OrderDTO(order);
-            return ResponseEntity.status(HttpStatus.CREATED).body(orderDTO);
-        } catch (HttpClientErrorException | HttpServerErrorException ex) {
-            System.err.println("Error al comunicarse con el servicio externo: " + ex.getMessage());
-            return ResponseEntity.status(ex.getStatusCode()).build();
-        } catch (Exception ex) {
-            System.err.println("Error inesperado: " + ex.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            OrderCreateWrapperRecord orderCreateWrapperRecord = new OrderCreateWrapperRecord(orderDTO, errorList);
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(orderCreateWrapperRecord);
+
+        } catch (HttpClientErrorException e){
+            throw new OrderException("Error communicating with product-service", HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+
+    private List<ErrorProductRecord> generateErrorProductsList(List<ProductQuantityRecord> userProductsList, List<ExistentProductsRecord> existentProductsList) {
+        List<ErrorProductRecord> errorProductsList = new ArrayList<>();
+
+        userProductsList.stream()
+                .filter(userProduct ->
+                        !existentProductsList.stream().anyMatch(availableProduct ->
+                                availableProduct.id().equals(userProduct.id()) && availableProduct.price() != null)
+                )
+                .forEach(userProduct -> {
+                    boolean productExists = existentProductsList.stream()
+                            .anyMatch(p -> p.id().equals(userProduct.id()));
+
+                    if (productExists) {
+                        errorProductsList.add(new ErrorProductRecord(userProduct.id(), ProductErrorEnum.NO_STOCK));
+                    } else {
+                        errorProductsList.add(new ErrorProductRecord(userProduct.id(), ProductErrorEnum.NOT_FOUND));
+                    }
+                });
+
+        return errorProductsList;
+    }
+
 
     private List<OrderItem> generateOrderItems(List<ExistentProductsRecord> productRecords, OrderEntity order) {
         List<OrderItem> orderItems = new ArrayList<>();
         for (ExistentProductsRecord record : productRecords) {
+            if(record.price() != null) {
             OrderItem orderItem = new OrderItem(record.id(), record.quantity(), order);
+
             orderItemRepository.save(orderItem);
             orderItems.add(orderItem);
+            }
         }
         return orderItems;
+    }
+
+    private Long getUserIdFromEmail(String email) throws OrderException {
+        try{
+            String url = USER_SERVICE_URL + "/email/" + email;
+            return restTemplate.getForObject(url, Long.class);
+        } catch (RestClientException e) {
+            if (e instanceof HttpStatusCodeException){
+                HttpStatusCodeException aux = (HttpStatusCodeException)e;
+                throw new OrderException("Error communicating with product-service", (HttpStatus) aux.getStatusCode());
+            }else{
+                throw new OrderException("Error communicating with user-service", HttpStatus.INTERNAL_SERVER_ERROR);
+            }
+
+        }
     }
 
     @Override

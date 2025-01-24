@@ -1,8 +1,10 @@
 package com.order.order_service.controllers;
 
 import com.order.order_service.dtos.CreateOrderRecord;
+import com.order.order_service.dtos.OrderCreateWrapperRecord;
 import com.order.order_service.dtos.OrderDTO;
 import com.order.order_service.dtos.OrderItemDTO;
+import com.order.order_service.exceptions.OrderException;
 import com.order.order_service.exceptions.OrderNotFoundException;
 import com.order.order_service.services.OrderItemService;
 import com.order.order_service.services.OrderService;
@@ -19,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("orders")
+@RequestMapping("api/orders")
 public class OrderController {
 
     @Autowired
@@ -57,7 +59,7 @@ public class OrderController {
             )
     })
     @PostMapping
-    public ResponseEntity<OrderDTO> createOrder(@RequestBody CreateOrderRecord createOrderRecord) {
+    public ResponseEntity<OrderCreateWrapperRecord> createOrder(@RequestBody CreateOrderRecord createOrderRecord) throws OrderException {
         return orderService.createOrder(createOrderRecord);
     }
 

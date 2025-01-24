@@ -1,8 +1,10 @@
 package com.order.order_service.services;
 
 import com.order.order_service.dtos.CreateOrderRecord;
+import com.order.order_service.dtos.OrderCreateWrapperRecord;
 import com.order.order_service.dtos.OrderDTO;
 import com.order.order_service.exceptions.IllegalAttributeException;
+import com.order.order_service.exceptions.OrderException;
 import com.order.order_service.exceptions.OrderNotFoundException;
 import com.order.order_service.models.OrderEntity;
 import org.springframework.http.ResponseEntity;
@@ -15,7 +17,7 @@ public interface OrderService {
 
     OrderEntity saveOrder(OrderEntity orderEntity);
 
-    ResponseEntity<OrderDTO> createOrder(CreateOrderRecord createOrderRecord) throws IllegalAttributeException;
+    ResponseEntity<OrderCreateWrapperRecord> createOrder(CreateOrderRecord createOrderRecord) throws IllegalAttributeException, OrderException;
 
     ResponseEntity<OrderDTO> updateOrder(Long id, OrderDTO orderDTO) throws OrderNotFoundException, IllegalArgumentException;
 
