@@ -135,4 +135,10 @@ public class OrderController {
     public ResponseEntity<String> deleteOrderItem(@PathVariable Long id) throws OrderNotFoundException {
         return orderItemService.deleteOrderItem(id);
     }
+
+    @PutMapping("/change-status/{orderId}")
+    public ResponseEntity<OrderDTO> changeStatus(@PathVariable Long orderId, @RequestBody UpdateOrderRecord updateOrderRecord) throws OrderException {
+        OrderDTO orderDTO = orderService.changeStatus(orderId, updateOrderRecord.orderStatus());
+        return new ResponseEntity<>(orderDTO, HttpStatus.CREATED);
+    }
 }
