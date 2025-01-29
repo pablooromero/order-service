@@ -170,7 +170,7 @@ public class OrderServiceImplementation implements OrderService {
             } catch(RestClientException e){
             }
         }
-        OrderToPdfDTO orderToPdfDTO = new OrderToPdfDTO(order.getId(), order.getUserId(), "brunotrinitario@gmail.com", listProducts);
+        OrderToPdfDTO orderToPdfDTO = new OrderToPdfDTO(order.getId(), order.getUserId(), "pabloromerook@gmail.com", listProducts);
         rabbitTemplate.convertAndSend("email-exchange", "user.pdf", orderToPdfDTO);
     }
 
