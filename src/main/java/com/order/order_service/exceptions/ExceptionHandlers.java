@@ -30,4 +30,12 @@ public class ExceptionHandlers {
         else
             return new ResponseEntity<>(orderException.getMessage(), HttpStatus.BAD_REQUEST);
     }
+
+    @ExceptionHandler(OrderItemException.class)
+    public ResponseEntity<String> orderItemExceptionHandler(OrderItemException orderItemException){
+        if (orderItemException.getHttpStatus()!=null)
+            return new ResponseEntity<>(orderItemException.getMessage(), orderItemException.getHttpStatus());
+        else
+            return new ResponseEntity<>(orderItemException.getMessage(), HttpStatus.BAD_REQUEST);
+    }
 }

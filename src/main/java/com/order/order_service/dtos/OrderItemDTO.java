@@ -18,6 +18,13 @@ public class OrderItemDTO {
         quantity = orderItem.getQuantity();
     }
 
+    public OrderItemDTO(Long id, Long productId, Integer quantity) {
+        this.id = id;
+        this.orderId = orderId;
+        this.productId = productId;
+        this.quantity = quantity;
+    }
+
     public Long getId() {
         return id;
     }

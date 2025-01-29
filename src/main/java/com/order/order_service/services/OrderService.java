@@ -1,14 +1,15 @@
 package com.order.order_service.services;
 
-import com.order.order_service.dtos.CreateOrderRecord;
-import com.order.order_service.dtos.OrderCreateWrapperRecord;
-import com.order.order_service.dtos.OrderDTO;
+import com.order.order_service.dtos.*;
+import com.order.order_service.enums.OrderStatusEnum;
 import com.order.order_service.exceptions.IllegalAttributeException;
 import com.order.order_service.exceptions.OrderException;
 import com.order.order_service.exceptions.OrderNotFoundException;
 import com.order.order_service.models.OrderEntity;
+import com.order.order_service.models.OrderItem;
 import org.springframework.http.ResponseEntity;
 
+import java.util.HashMap;
 import java.util.List;
 
 public interface OrderService {
@@ -17,9 +18,17 @@ public interface OrderService {
 
     OrderEntity saveOrder(OrderEntity orderEntity);
 
-    ResponseEntity<OrderCreateWrapperRecord> createOrder(CreateOrderRecord createOrderRecord) throws IllegalAttributeException, OrderException;
+    OrderDTO getOrderById(Long id) throws OrderException;
 
-    ResponseEntity<OrderDTO> updateOrder(Long id, OrderDTO orderDTO) throws OrderNotFoundException, IllegalArgumentException;
+    OrderCreateWrapperRecord createOrder(CreateOrderRecord newOrder) throws OrderException;
+
+    HashMap<Long,Integer> getExistentProducts(List<ProductQuantityRecord> productQuantityRecordList) throws OrderException;
+
+    List<ErrorProductRecord> setOrderItemList(HashMap<Long, Integer> existentProducts, List<ProductQuantityRecord> wantedProducts, OrderEntity order);
+
+    void updateProducts(List<OrderItem> orderItemList, int factor) throws OrderException;
+
+    OrderDTO changeStatus(Long id, OrderStatusEnum orderStatus) throws OrderException;
 
     ResponseEntity<String> deleteOrder(Long id) throws OrderNotFoundException;
 

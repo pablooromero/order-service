@@ -1,10 +1,8 @@
 package com.order.order_service.controllers;
 
-import com.order.order_service.dtos.CreateOrderRecord;
-import com.order.order_service.dtos.OrderCreateWrapperRecord;
-import com.order.order_service.dtos.OrderDTO;
-import com.order.order_service.dtos.OrderItemDTO;
+import com.order.order_service.dtos.*;
 import com.order.order_service.exceptions.OrderException;
+import com.order.order_service.exceptions.OrderItemException;
 import com.order.order_service.exceptions.OrderNotFoundException;
 import com.order.order_service.services.OrderItemService;
 import com.order.order_service.services.OrderService;
@@ -15,6 +13,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -29,7 +28,6 @@ public class OrderController {
 
     @Autowired
     private OrderItemService orderItemService;
-
 
     @Operation(summary = "Get all orders", description = "Retrieve a list of all orders")
     @ApiResponses({
@@ -58,34 +56,13 @@ public class OrderController {
                     )
             )
     })
+
     @PostMapping
-    public ResponseEntity<OrderCreateWrapperRecord> createOrder(@RequestBody CreateOrderRecord createOrderRecord) throws OrderException {
-        return orderService.createOrder(createOrderRecord);
+    public ResponseEntity<OrderCreateWrapperRecord> createOrder(@RequestBody CreateOrderRecord newOrder) throws OrderException {
+        OrderCreateWrapperRecord createdOrder = orderService.createOrder(newOrder);
+        return new ResponseEntity<>(createdOrder, HttpStatus.CREATED);
     }
 
-
-    @Operation(summary = "Update a order", description = "Update an existing order by its ID")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Order updated successfully",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrderDTO.class))
-            ),
-            @ApiResponse(responseCode = "400", description = "Validation errors",
-                    content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(value = "Order status cannot empty or null")
-                    )
-            ),
-            @ApiResponse(responseCode = "404", description = "Order not found",
-                    content = @Content(mediaType = "application/json",
-                            examples = {
-                                    @ExampleObject(value = "Order not found with ID: 1")
-                            }
-                    )
-            )
-    })
-    @PutMapping("/{id}")
-    public ResponseEntity<OrderDTO> updateOrder(@PathVariable Long id, @RequestBody OrderDTO orderDTO) throws OrderNotFoundException {
-        return orderService.updateOrder(id, orderDTO);
-    }
 
     @Operation(summary = "Delete a order", description = "Delete an existing order by its ID")
     @ApiResponses({
@@ -113,9 +90,10 @@ public class OrderController {
                     )
             )
     })
-    @PostMapping("add-item")
-    public ResponseEntity<OrderItemDTO> createOrderItem(@RequestBody OrderItemDTO orderItemDTO) throws OrderNotFoundException {
-        return orderItemService.createOrderItem(orderItemDTO);
+    @PostMapping("/{orderId}")
+    public ResponseEntity<OrderItemDTO> addOrderItem(@PathVariable Long orderId,@RequestBody ProductQuantityRecord newOrderItem) throws OrderException, OrderItemException {
+        OrderItemDTO orderItemRecord = orderItemService.addOrderItem(orderId, newOrderItem);
+        return ResponseEntity.status(HttpStatus.CREATED).body(orderItemRecord);
     }
 
 
@@ -137,9 +115,10 @@ public class OrderController {
                     )
             )
     })
-    @PutMapping("edit-item/{id}")
-    public ResponseEntity<OrderItemDTO> updateOrderItem(@PathVariable Long id, @RequestBody OrderItemDTO orderItemDTO) {
-        return orderItemService.updateOrderItem(id, orderItemDTO);
+    @PutMapping("/item/{orderItemId}")
+    public ResponseEntity<OrderItemDTO> updateOrderItem(@PathVariable Long orderItemId, @RequestBody OrderItemUpdateRecord orderItemUpdateRecord) throws OrderItemException, OrderException {
+        OrderItemDTO orderItems = orderItemService.updateOrderItemQuantity(orderItemId, orderItemUpdateRecord.quantity());
+        return ResponseEntity.ok(orderItems);
     }
 
 
