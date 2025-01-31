@@ -1,5 +1,6 @@
 package com.order.order_service.controllers;
 
+import com.order.order_service.config.JwtUtils;
 import com.order.order_service.dtos.*;
 import com.order.order_service.exceptions.OrderException;
 import com.order.order_service.exceptions.OrderItemException;
@@ -12,12 +13,14 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("api/orders")
@@ -29,6 +32,9 @@ public class OrderController {
     @Autowired
     private OrderItemService orderItemService;
 
+    @Autowired
+    private JwtUtils jwtUtils;
+
     @Operation(summary = "Get all orders", description = "Retrieve a list of all orders")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Successful retrieval of orders",
@@ -39,8 +45,8 @@ public class OrderController {
                     )
             )
     })
-    @GetMapping
-    public ResponseEntity<List<OrderDTO>> getAllOrders() {
+    @GetMapping("/admin")
+    public ResponseEntity<Set<OrderDTO>> getAllOrders() {
         return orderService.getAllOrders();
     }
 
@@ -57,10 +63,49 @@ public class OrderController {
             )
     })
 
-    @PostMapping
-    public ResponseEntity<OrderCreateWrapperRecord> createOrder(@RequestBody CreateOrderRecord newOrder) throws OrderException {
-        OrderCreateWrapperRecord createdOrder = orderService.createOrder(newOrder);
-        return new ResponseEntity<>(createdOrder, HttpStatus.CREATED);
+    @GetMapping("/user")
+    public ResponseEntity<Set<OrderDTO>> getAllOrdersByUserId(HttpServletRequest request) {
+        Long id = jwtUtils.getIdFromToken(request.getHeader("Authorization"));
+
+        return orderService.getAllOrdersByUserId(id);
+    }
+
+
+    @GetMapping("/admin/{userId}")
+    public ResponseEntity<Set<OrderDTO>> getAllOrdersByUserId(@PathVariable Long userId) {
+        return orderService.getAllOrdersByUserId(userId);
+    }
+
+    @GetMapping("/user/{orderId}")
+    public ResponseEntity<OrderDTO> getOrderById(@PathVariable Long orderId, HttpServletRequest request) throws OrderException {
+        Long userId = jwtUtils.getIdFromToken(request.getHeader("Authorization"));
+        return orderService.getOrderByUserId(userId, orderId);
+    }
+
+    @GetMapping("/admin/{orderId}")
+    public ResponseEntity<OrderDTO> getOrderById(@PathVariable Long orderId) throws OrderException {
+        return orderService.getOrderById(orderId);
+    }
+
+
+    @PostMapping("/user")
+    public ResponseEntity<OrderCreatedRecord> createOrder(@RequestBody NewOrderRecord newOrder, HttpServletRequest request) throws OrderException {
+        String email = jwtUtils.getEmailFromToken(request.getHeader("Authorization"));
+        return orderService.createOrder(email, newOrder);
+    }
+
+    @PutMapping("/user/{orderId}")
+    public ResponseEntity<OrderDTO> changeStatus(@PathVariable Long orderId, @RequestBody UpdateOrderRecord updateOrderRecord, HttpServletRequest request) throws OrderException {
+        Long userId = jwtUtils.getIdFromToken(request.getHeader("Authorization"));
+        String email = jwtUtils.getEmailFromToken(request.getHeader("Authorization"));
+        return orderService.changeStatus(userId, email, orderId, updateOrderRecord.orderStatus());
+    }
+
+    @DeleteMapping("/user/{orderId}")
+    public ResponseEntity<String> deleteOrder(@PathVariable Long orderId, HttpServletRequest request) throws OrderNotFoundException, OrderException {
+        Long userId = jwtUtils.extractId(request.getHeader("Authorization"));
+
+        return orderService.deleteOrderUser(userId, orderId);
     }
 
 
@@ -73,9 +118,24 @@ public class OrderController {
                     )
             )
     })
-    @DeleteMapping("/{id}")
-    public ResponseEntity<String> deleteOrder(@PathVariable Long id) throws OrderNotFoundException {
-        return orderService.deleteOrder(id);
+    @DeleteMapping("/admin/{orderId}")
+    public ResponseEntity<String> deleteOrder(@PathVariable Long orderId) throws OrderNotFoundException {
+        return orderService.deleteOrder(orderId);
+    }
+
+
+
+
+    /**
+     * ORDER ITEMS
+     * --------------------------------------------------------------------------------------------------------------------------------
+     * */
+
+    @GetMapping("/user/item/{orderId}")
+    public ResponseEntity<Set<OrderItemRecord>> getAllOrderItemsByOrderId(@PathVariable Long orderId, HttpServletRequest request) throws OrderException {
+        Long userId = jwtUtils.getIdFromToken(request.getHeader("Authorization"));
+
+        return orderItemService.getAllOrderItemsByOrderId(userId, orderId);
     }
 
 
@@ -90,10 +150,10 @@ public class OrderController {
                     )
             )
     })
-    @PostMapping("/{orderId}")
-    public ResponseEntity<OrderItemDTO> addOrderItem(@PathVariable Long orderId,@RequestBody ProductQuantityRecord newOrderItem) throws OrderException, OrderItemException {
-        OrderItemDTO orderItemRecord = orderItemService.addOrderItem(orderId, newOrderItem);
-        return ResponseEntity.status(HttpStatus.CREATED).body(orderItemRecord);
+    @PostMapping("/user/item/{orderId}")
+    public ResponseEntity<OrderItemRecord> addOrderItem(@PathVariable Long orderId, @RequestBody ProductQuantityRecord newOrderItem, HttpServletRequest request) throws OrderException, OrderItemException {
+        Long userId = jwtUtils.getIdFromToken(request.getHeader("Authorization"));
+        return orderItemService.addOrderItem(userId, orderId, newOrderItem);
     }
 
 
@@ -115,10 +175,10 @@ public class OrderController {
                     )
             )
     })
-    @PutMapping("/item/{orderItemId}")
-    public ResponseEntity<OrderItemDTO> updateOrderItem(@PathVariable Long orderItemId, @RequestBody OrderItemUpdateRecord orderItemUpdateRecord) throws OrderItemException, OrderException {
-        OrderItemDTO orderItems = orderItemService.updateOrderItemQuantity(orderItemId, orderItemUpdateRecord.quantity());
-        return ResponseEntity.ok(orderItems);
+    @PutMapping("/user/item/{orderItemId}")
+    public ResponseEntity<OrderItemRecord> updateOrderItem(@PathVariable Long orderItemId, @RequestBody OrderItemUpdateRecord orderItemUpdateRecord, HttpServletRequest request) throws OrderItemException, OrderException {
+        Long userId = jwtUtils.getIdFromToken(request.getHeader("Authorization"));
+        return orderItemService.updateOrderItemQuantity(userId, orderItemId, orderItemUpdateRecord.quantity());
     }
 
 
@@ -131,14 +191,10 @@ public class OrderController {
                     )
             )
     })
-    @DeleteMapping("delete-item/{id}")
-    public ResponseEntity<String> deleteOrderItem(@PathVariable Long id) throws OrderNotFoundException {
-        return orderItemService.deleteOrderItem(id);
+    @DeleteMapping("user/item/{orderItemId}")
+    public ResponseEntity<String> deleteOrderItem(@PathVariable Long orderItemId, HttpServletRequest request) throws OrderNotFoundException, OrderItemException, OrderException {
+        Long userId = jwtUtils.getIdFromToken(request.getHeader("Authorization"));
+        return orderItemService.deleteOrderItem(userId, orderItemId);
     }
 
-    @PutMapping("/change-status/{orderId}")
-    public ResponseEntity<OrderDTO> changeStatus(@PathVariable Long orderId, @RequestBody UpdateOrderRecord updateOrderRecord) throws OrderException {
-        OrderDTO orderDTO = orderService.changeStatus(orderId, updateOrderRecord.orderStatus());
-        return new ResponseEntity<>(orderDTO, HttpStatus.CREATED);
-    }
 }

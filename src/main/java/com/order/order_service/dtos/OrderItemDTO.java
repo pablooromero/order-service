@@ -13,7 +13,7 @@ public class OrderItemDTO {
 
     public OrderItemDTO(OrderItem orderItem) {
         id = orderItem.getId();
-        orderId = orderItem.getOrder().getId();
+        orderId = orderItem.getOrderEntity().getId();
         productId = orderItem.getProductId();
         quantity = orderItem.getQuantity();
     }

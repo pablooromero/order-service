@@ -18,7 +18,7 @@ public class OrderDTO {
         id = orderEntity.getId();
         userId = orderEntity.getUserId();
         status = orderEntity.getStatus();
-        orderItems = orderEntity.getProducts()
+        orderItems = orderEntity.getOrderItemList()
                 .stream()
                 .map(OrderItemDTO::new)
                 .toList();

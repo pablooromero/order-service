@@ -12,4 +12,6 @@ public class Constants {
     public static final String USER_NOT_FOUND= "The user doesn't exists";
     public static final String PRODUCT_NOT_FOUND= "The product doesn't exists";
     public static final String NEGATIVE_STOCK = "Not enough stock";
+    public static final String NOT_PERM = "The user doesn't have permissions";
+    public static final String ORDER_DELETED = "Order deleted!";
 }

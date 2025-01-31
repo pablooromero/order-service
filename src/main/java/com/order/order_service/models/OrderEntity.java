@@ -19,13 +19,13 @@ public class OrderEntity {
     @Enumerated
     private OrderStatusEnum status;
 
-    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
-    private List<OrderItem> products;
+    @OneToMany(mappedBy = "orderEntity")
+    private List<OrderItem> orderItemList;
 
-    public OrderEntity(Long userId, OrderStatusEnum status, List<OrderItem> products) {
+    public OrderEntity(List<OrderItem> orderItemList, Long userId, OrderStatusEnum status) {
+        this.orderItemList = orderItemList;
         this.userId = userId;
         this.status = status;
-        this.products = products;
     }
 
     public OrderEntity() {}
@@ -50,16 +50,21 @@ public class OrderEntity {
         this.status = status;
     }
 
-    public List<OrderItem> getProducts() {
-        return products;
+    public List<OrderItem> getOrderItemList() {
+        return orderItemList;
     }
 
-    public void setProducts(List<OrderItem> products) {
-        this.products = products;
+    public void setOrderItemList(List<OrderItem> products) {
+        this.orderItemList = orderItemList;
     }
 
-    public void addProduct(OrderItem orderItem) {
-        orderItem.setOrder(this);
-        products.add(orderItem);
+    public void addOrderItemList(OrderItem orderItem) {
+        orderItem.setOrderEntity(this);
+        orderItemList.add(orderItem);
+    }
+
+    public void addOrderItem(OrderItem orderItem){
+        orderItemList.add(orderItem);
+        orderItem.setOrderEntity(this);
     }
 }
