@@ -28,7 +28,7 @@ public interface OrderService {
 
     HashMap<Long,Integer> getExistentProducts(List<ProductQuantityRecord> productQuantityRecordList) throws OrderException;
 
-    List<ErrorProductRecord> setOrderItemList(HashMap<Long, Integer> existentProducts, List<ProductQuantityRecord> wantedProducts, OrderEntity order);
+    OrderItemListWrapper setOrderItemList(HashMap<Long, Integer> existentProducts, List<ProductQuantityRecord> wantedProducts, OrderEntity order);
 
     void updateProducts(List<OrderItem> orderItemList, int factor) throws ProductServiceException;
 

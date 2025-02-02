@@ -30,7 +30,33 @@ public class OrderToPdfDTO {
         return userMail;
     }
 
-    public List<ProductRecord> getnewProductList() {
+    public List<ProductRecord> getNewProductList() {
         return newProductList;
+    }
+
+    public void setOrderId(Long orderId) {
+        this.orderId = orderId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
+    }
+
+    public void setUserMail(String userMail) {
+        this.userMail = userMail;
+    }
+
+    public void setNewProductList(List<ProductRecord> newProductList) {
+        this.newProductList = newProductList;
+    }
+
+    @Override
+    public String toString() {
+        return "OrderToPdfDTO{" +
+                "orderId=" + orderId +
+                ", userId=" + userId +
+                ", userMail='" + userMail + '\'' +
+                ", newProductList=" + newProductList +
+                '}';
     }
 }
