@@ -51,18 +51,12 @@ public class OrderController {
     }
 
 
-    @Operation(summary = "Create a new order", description = "Create a new order")
+    @Operation(summary = "Get all orders for the authenticated user",
+            description = "Retrieve all orders associated with the authenticated user")
     @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "Order created successfully",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrderDTO.class))
-            ),
-            @ApiResponse(responseCode = "400", description = "Validation errors",
-                    content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(value = "Order status cannot be null or empty")
-                    )
-            )
+            @ApiResponse(responseCode = "200", description = "Successful retrieval of user's orders",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrderDTO.class)))
     })
-
     @GetMapping("/user")
     public ResponseEntity<Set<OrderDTO>> getAllOrdersByUserId(HttpServletRequest request) {
         Long id = jwtUtils.getIdFromToken(request.getHeader("Authorization"));
@@ -71,29 +65,78 @@ public class OrderController {
     }
 
 
+    @Operation(summary = "Get all orders by user ID (admin)",
+            description = "Retrieve all orders for a specific user by their user ID (admin access)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Successful retrieval of user's orders",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrderDTO.class)))
+    })
     @GetMapping("/admin/{userId}")
     public ResponseEntity<Set<OrderDTO>> getAllOrdersByUserId(@PathVariable Long userId) {
         return orderService.getAllOrdersByUserId(userId);
     }
 
+
+    @Operation(summary = "Get order by ID (user)",
+            description = "Retrieve the details of an order by its ID for the authenticated user")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Order retrieved successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrderDTO.class))),
+            @ApiResponse(responseCode = "404", description = "Order not found",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "Order not found with ID: 1")))
+    })
     @GetMapping("/user/{orderId}")
     public ResponseEntity<OrderDTO> getOrderById(@PathVariable Long orderId, HttpServletRequest request) throws OrderException {
         Long userId = jwtUtils.getIdFromToken(request.getHeader("Authorization"));
         return orderService.getOrderByUserId(userId, orderId);
     }
 
+
+
+    @Operation(summary = "Get order by ID (admin)",
+            description = "Retrieve the details of an order by its ID (admin access)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Order retrieved successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrderDTO.class))),
+            @ApiResponse(responseCode = "404", description = "Order not found",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "Order not found with ID: 1")))
+    })
     @GetMapping("/admin/{orderId}")
     public ResponseEntity<OrderDTO> getOrderById(@PathVariable Long orderId) throws OrderException {
         return orderService.getOrderById(orderId);
     }
 
 
+    @Operation(summary = "Create a new order",
+            description = "Create a new order for the authenticated user")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Order created successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrderDTO.class))),
+            @ApiResponse(responseCode = "400", description = "Validation errors",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "Order status cannot be null or empty")))
+    })
     @PostMapping("/user")
     public ResponseEntity<OrderCreatedRecord> createOrder(@RequestBody NewOrderRecord newOrder, HttpServletRequest request) throws OrderException {
         String email = jwtUtils.getEmailFromToken(request.getHeader("Authorization"));
         return orderService.createOrder(email, newOrder);
     }
 
+
+    @Operation(summary = "Change order status",
+            description = "Change the status of an order for the authenticated user")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Order status updated successfully",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrderDTO.class))),
+            @ApiResponse(responseCode = "400", description = "Invalid status or request data",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "Invalid order status provided"))),
+            @ApiResponse(responseCode = "404", description = "Order not found",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "Order not found with ID: 1")))
+    })
     @PutMapping("/user/{orderId}")
     public ResponseEntity<OrderDTO> changeStatus(@PathVariable Long orderId, @RequestBody UpdateOrderRecord updateOrderRecord, HttpServletRequest request) throws OrderException {
         Long userId = jwtUtils.getIdFromToken(request.getHeader("Authorization"));
@@ -101,6 +144,17 @@ public class OrderController {
         return orderService.changeStatus(userId, email, orderId, updateOrderRecord.orderStatus());
     }
 
+
+    @Operation(summary = "Delete an order (user)",
+            description = "Delete an order by its ID for the authenticated user")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Order deleted successfully",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "Order deleted successfully"))),
+            @ApiResponse(responseCode = "404", description = "Order not found",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "Order not found with ID: 1")))
+    })
     @DeleteMapping("/user/{orderId}")
     public ResponseEntity<String> deleteOrder(@PathVariable Long orderId, HttpServletRequest request) throws OrderNotFoundException, OrderException {
         Long userId = jwtUtils.extractId(request.getHeader("Authorization"));
@@ -109,14 +163,13 @@ public class OrderController {
     }
 
 
-    @Operation(summary = "Delete a order", description = "Delete an existing order by its ID")
+    @Operation(summary = "Delete an order (admin)",
+            description = "Delete an existing order by its ID (admin access)")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Order deleted successfully"),
             @ApiResponse(responseCode = "404", description = "Order not found",
                     content = @Content(mediaType = "application/json",
-                            examples = @ExampleObject(value = "Order not found with ID: 1")
-                    )
-            )
+                            examples = @ExampleObject(value = "Order not found with ID: 1")))
     })
     @DeleteMapping("/admin/{orderId}")
     public ResponseEntity<String> deleteOrder(@PathVariable Long orderId) throws OrderNotFoundException {
@@ -131,6 +184,12 @@ public class OrderController {
      * --------------------------------------------------------------------------------------------------------------------------------
      * */
 
+    @Operation(summary = "Get all order items by order ID",
+            description = "Retrieve all order items for a specific order belonging to the authenticated user")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Successful retrieval of order items",
+                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrderItemRecord.class)))
+    })
     @GetMapping("/user/item/{orderId}")
     public ResponseEntity<Set<OrderItemRecord>> getAllOrderItemsByOrderId(@PathVariable Long orderId, HttpServletRequest request) throws OrderException {
         Long userId = jwtUtils.getIdFromToken(request.getHeader("Authorization"));
