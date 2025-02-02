@@ -11,7 +11,9 @@ import com.order.order_service.models.OrderItem;
 import com.order.order_service.repositories.OrderItemRepository;
 import com.order.order_service.repositories.OrderRepository;
 import com.order.order_service.services.OrderService;
+import com.order.order_service.services.OutboxMessageService;
 import com.order.order_service.utils.Constants;
+import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -23,6 +25,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.*;
 
 import java.util.*;
@@ -43,7 +46,7 @@ public class OrderServiceImplementation implements OrderService {
     private RestTemplate restTemplate;
 
     @Autowired
-    RabbitTemplate rabbitTemplate;
+    private OutboxMessageService outboxMessageService;
 
     @Value("${USER_SERVICE_URL}")
     private String USER_SERVICE_URL;
@@ -100,6 +103,7 @@ public class OrderServiceImplementation implements OrderService {
     }
 
     @Override
+    @Transactional(rollbackFor = {Exception.class})
     public ResponseEntity<OrderCreatedRecord> createOrder(String email, NewOrderRecord newOrder) throws OrderException {
         logger.info("Creating order for user with email: {}", email);
         Long userId = getUserIdFromEmail(email);
@@ -110,10 +114,15 @@ public class OrderServiceImplementation implements OrderService {
 
         saveOrder(order);
 
-        List<ErrorProductRecord> orderItemsError = setOrderItemList(existentProductMap, newOrder.recordList(), order);
+        OrderItemListWrapper orderItemListWrapper = setOrderItemList(existentProductMap, newOrder.recordList(), order);
+        List<ErrorProductRecord> orderItemsError = orderItemListWrapper.getErrorProductRecordList();
+        List<OrderItem> orderItemList = orderItemListWrapper.getOrderItemList();
+
+        order.setOrderItemList(orderItemList);
+        saveOrder(order);
 
         try {
-            updateProducts(order.getOrderItemList(),-1);
+            updateProducts(orderItemList,-1);
         } catch(ProductServiceException e){
             logger.error("Error updating product stock: {}", e.getMessage());
             throw new OrderException(e.getMessage(),HttpStatus.INTERNAL_SERVER_ERROR);
@@ -145,7 +154,8 @@ public class OrderServiceImplementation implements OrderService {
     }
 
     @Override
-    public List<ErrorProductRecord> setOrderItemList(HashMap<Long, Integer> existentProducts, List<ProductQuantityRecord> wantedProducts, OrderEntity order){
+    @Transactional
+    public OrderItemListWrapper setOrderItemList(HashMap<Long, Integer> existentProducts, List<ProductQuantityRecord> wantedProducts, OrderEntity order) {
         logger.info("Setting order items for order {}", order.getId());
 
         List<OrderItem> orderItemList = new ArrayList<>();
@@ -155,7 +165,7 @@ public class OrderServiceImplementation implements OrderService {
             if (existentProducts.containsKey(wantedProduct.id())) {
                 Integer realQuantity = existentProducts.get(wantedProduct.id());
 
-                if (realQuantity>= wantedProduct.quantity()) {
+                if (realQuantity >= wantedProduct.quantity()) {
                     OrderItem orderItem = new OrderItem(wantedProduct.id(), wantedProduct.quantity(), order);
                     orderItemRepository.save(orderItem);
                     orderItemList.add(orderItem);
@@ -168,10 +178,7 @@ public class OrderServiceImplementation implements OrderService {
             }
         });
 
-        order.setOrderItemList(orderItemList);
-        saveOrder(order);
-        logger.info("Order {} updated with {} items and {} errors", order.getId(), orderItemList.size(), errorProductList.size());
-        return errorProductList;
+        return new OrderItemListWrapper(orderItemList, errorProductList);
     }
 
     @Override
@@ -180,7 +187,7 @@ public class OrderServiceImplementation implements OrderService {
         List<ProductQuantityRecord> productQuantityRecordList = new ArrayList<>();
 
         orderItemList.forEach(orderItem -> {
-            productQuantityRecordList.add(new ProductQuantityRecord(orderItem.getProductId(), factor*orderItem.getQuantity()));
+            productQuantityRecordList.add(new ProductQuantityRecord(orderItem.getProductId(), factor * orderItem.getQuantity()));
         });
 
         HttpEntity<List<ProductQuantityRecord>> httpEntity = new HttpEntity<>(productQuantityRecordList);
@@ -211,6 +218,7 @@ public class OrderServiceImplementation implements OrderService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public ResponseEntity<OrderDTO> changeStatus(Long userId, String userMail, Long orderId, OrderStatusEnum orderStatus) throws OrderException {
         logger.info("Changing status of order {} to {}", orderId, orderStatus);
         OrderEntity order = orderRepository.findById(orderId)
@@ -226,27 +234,38 @@ public class OrderServiceImplementation implements OrderService {
         order = orderRepository.save(order);
 
         if (order.getStatus() == OrderStatusEnum.COMPLETED){
-            sendDataToGeneratePdf(order, userMail);
+            OrderToPdfDTO orderToPdfDTO = sendDataToGeneratePdf(order, userMail);
+            outboxMessageService.saveOutboxMessage(
+                    orderToPdfDTO,
+                    "OrderPdfEvent",
+                    "email-exchange",
+                    "user.pdf"
+            );
+            logger.info("Outbox message saved for order {}", order.getId());
         }
 
         return new ResponseEntity<>(new OrderDTO(order), HttpStatus.OK);
     }
 
-    private void sendDataToGeneratePdf(OrderEntity order, String userMail) {
+    private OrderToPdfDTO sendDataToGeneratePdf(OrderEntity order, String userMail) {
         logger.info("Sending data to generate PDF for order {}", order.getId());
         List<ProductRecord> listProducts = new ArrayList<>();
 
         for (OrderItem item : order.getOrderItemList()){
             try {
-                ProductRecord product = restTemplate.getForObject(PRODUCT_SERVICE_URL + "/" + item.getProductId(), ProductRecord.class );
-                listProducts.add(product);
+                ProductRecord product = restTemplate.getForObject(PRODUCT_SERVICE_URL + "/public/" + item.getProductId(), ProductRecord.class );
+
+                assert product != null;
+                ProductRecord productRecord = new ProductRecord(product.id(), product.name(), product.description(), product.price(), item.getQuantity());
+                listProducts.add(productRecord);
             } catch (RestClientException e){
                 logger.warn("Failed to fetch product {} details", item.getProductId());
             }
         }
 
         OrderToPdfDTO orderToPdfDTO = new OrderToPdfDTO(order.getId(), order.getUserId(), userMail, listProducts);
-        rabbitTemplate.convertAndSend("email-exchange", "user.pdf", orderToPdfDTO);
+
+        return orderToPdfDTO;
     }
 
 

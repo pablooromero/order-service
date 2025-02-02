@@ -3,9 +3,8 @@ package com.order.order_service.models;
 import com.order.order_service.enums.OrderStatusEnum;
 import jakarta.persistence.*;
 
-import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 @Entity
 public class OrderEntity {
@@ -19,11 +18,11 @@ public class OrderEntity {
     @Enumerated
     private OrderStatusEnum status;
 
-    @OneToMany(mappedBy = "orderEntity")
+    @OneToMany(mappedBy = "orderEntity", cascade = CascadeType.ALL)
     private List<OrderItem> orderItemList;
 
     public OrderEntity(List<OrderItem> orderItemList, Long userId, OrderStatusEnum status) {
-        this.orderItemList = orderItemList;
+        this.orderItemList = new ArrayList<>();
         this.userId = userId;
         this.status = status;
     }
