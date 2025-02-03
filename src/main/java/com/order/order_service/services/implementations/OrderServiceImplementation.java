@@ -161,22 +161,23 @@ public class OrderServiceImplementation implements OrderService {
         List<OrderItem> orderItemList = new ArrayList<>();
         List<ErrorProductRecord> errorProductList = new ArrayList<>();
 
-        wantedProducts.forEach(wantedProduct -> {
+        for (ProductQuantityRecord wantedProduct : wantedProducts) {
             if (existentProducts.containsKey(wantedProduct.id())) {
                 Integer realQuantity = existentProducts.get(wantedProduct.id());
-
                 if (realQuantity >= wantedProduct.quantity()) {
                     OrderItem orderItem = new OrderItem(wantedProduct.id(), wantedProduct.quantity(), order);
-                    orderItemRepository.save(orderItem);
                     orderItemList.add(orderItem);
                 } else {
                     errorProductList.add(new ErrorProductRecord(wantedProduct.id(), ProductErrorEnum.NO_STOCK));
                 }
-
             } else {
                 errorProductList.add(new ErrorProductRecord(wantedProduct.id(), ProductErrorEnum.NOT_FOUND));
             }
-        });
+        }
+
+        if (!orderItemList.isEmpty()) {
+            orderItemList = orderItemRepository.saveAll(orderItemList);
+        }
 
         return new OrderItemListWrapper(orderItemList, errorProductList);
     }
