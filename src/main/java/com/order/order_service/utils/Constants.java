@@ -3,7 +3,6 @@ package com.order.order_service.utils;
 public class Constants {
     public static final String ORDER_NOT_FOUND = "The order doesn't exists";
     public static final String ORDER_ITEM_NOT_FOUND = "The order item doesn't exists";
-    public static final String INVALID_ORDER = "Invalid new order data";
     public static final String ITEM_ALREADY_EXISTS = "The product its already into the order, you may want to change the quantity";
     public static final String INV_QUANTITY = "The quantity provide its invalid";
     public static final String COM_ERR_PROD = "Error communicating with product-service";
@@ -14,4 +13,6 @@ public class Constants {
     public static final String NEGATIVE_STOCK = "Not enough stock";
     public static final String NOT_PERM = "The user doesn't have permissions";
     public static final String ORDER_DELETED = "Order deleted!";
+    public static final String ORDER_NOT_FOUND_WITH_ID = "Order not found with ID: ";
+    public static final String UPDATE_STOCK_ERROR = "Error updating product stock: ";
 }

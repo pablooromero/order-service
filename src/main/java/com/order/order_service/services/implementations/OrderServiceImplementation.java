@@ -13,17 +13,12 @@ import com.order.order_service.repositories.OrderRepository;
 import com.order.order_service.services.OrderService;
 import com.order.order_service.services.OutboxMessageService;
 import com.order.order_service.utils.Constants;
-import jakarta.persistence.EntityManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.*;
@@ -87,7 +82,7 @@ public class OrderServiceImplementation implements OrderService {
         logger.info("Fetching order with ID: {}", id);
         OrderEntity order = orderRepository.findById(id)
                 .orElseThrow(() -> {
-                    logger.error("Order with ID {} not found", id);
+                    logger.error(Constants.ORDER_NOT_FOUND_WITH_ID + "{}", id);
                     return new OrderException(Constants.ORDER_NOT_FOUND, HttpStatus.NOT_FOUND);
                 });
 
@@ -102,6 +97,21 @@ public class OrderServiceImplementation implements OrderService {
         return new ResponseEntity<>(order, HttpStatus.OK);
     }
 
+    private OrderEntityItemListWrapper createOrderEntity(Long userId, HashMap<Long, Integer> existentProductMap, List<ProductQuantityRecord> wantedProducts) throws OrderException {
+        OrderEntity order = new OrderEntity(null, userId, OrderStatusEnum.PENDING);
+        saveOrder(order);
+
+        OrderItemListWrapper orderItemListWrapper = setOrderItemList(existentProductMap, wantedProducts, order);
+
+        saveOrder(order);
+
+        OrderEntityItemListWrapper orderEntityItemListWrapper = new OrderEntityItemListWrapper();
+        orderEntityItemListWrapper.setOrderEntity(order);
+        orderEntityItemListWrapper.setOrderItemListWrapper(orderItemListWrapper);
+
+        return orderEntityItemListWrapper;
+    }
+
     @Override
     @Transactional(rollbackFor = {Exception.class})
     public ResponseEntity<OrderCreatedRecord> createOrder(String email, NewOrderRecord newOrder) throws OrderException {
@@ -110,21 +120,18 @@ public class OrderServiceImplementation implements OrderService {
 
         HashMap<Long,Integer> existentProductMap = getExistentProducts(newOrder.recordList());
 
-        OrderEntity order = new OrderEntity(null, userId, OrderStatusEnum.PENDING);
+        OrderEntityItemListWrapper orderEntityItemListWrapper = createOrderEntity(userId, existentProductMap, newOrder.recordList());
 
-        saveOrder(order);
-
-        OrderItemListWrapper orderItemListWrapper = setOrderItemList(existentProductMap, newOrder.recordList(), order);
-        List<ErrorProductRecord> orderItemsError = orderItemListWrapper.getErrorProductRecordList();
-        List<OrderItem> orderItemList = orderItemListWrapper.getOrderItemList();
-
-        order.setOrderItemList(orderItemList);
-        saveOrder(order);
+        OrderEntity order = orderEntityItemListWrapper.getOrderEntity();
+        List<OrderItem> orderItemList = orderEntityItemListWrapper.getOrderItemListWrapper().getOrderItemList();
+        List<ErrorProductRecord> orderItemsError = orderEntityItemListWrapper.getOrderItemListWrapper().getErrorProductRecordList();
 
         try {
             updateProducts(orderItemList,-1);
         } catch(ProductServiceException e){
-            logger.error("Error updating product stock: {}", e.getMessage());
+            logger.error(Constants.UPDATE_STOCK_ERROR + "{}", e.getMessage());
+
+            compensateOrderCreation(order);
             throw new OrderException(e.getMessage(),HttpStatus.INTERNAL_SERVER_ERROR);
         }
 
@@ -148,13 +155,12 @@ public class OrderServiceImplementation implements OrderService {
             System.out.println(PRODUCT_SERVICE_URL + "/private");
             return responseEntity.getBody();
         } catch(RestClientException e) {
-            logger.error("Error communicating with Product Service: {}", e.getMessage());
+            logger.error(Constants.COM_ERR_PROD + "{}", e.getMessage());
             throw new OrderException(Constants.COM_ERR_PROD, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
     @Override
-    @Transactional
     public OrderItemListWrapper setOrderItemList(HashMap<Long, Integer> existentProducts, List<ProductQuantityRecord> wantedProducts, OrderEntity order) {
         logger.info("Setting order items for order {}", order.getId());
 
@@ -196,8 +202,22 @@ public class OrderServiceImplementation implements OrderService {
         try {
             restTemplate.exchange(PRODUCT_SERVICE_URL + "/private/to-order", HttpMethod.PUT ,httpEntity, String.class);
         } catch(RestClientException e) {
-            logger.error("Error updating product stock: {}", e.getMessage());
+            logger.error(Constants.UPDATE_STOCK_ERROR + "{}", e.getMessage());
             throw new ProductServiceException(Constants.COM_ERR_PROD);
+        }
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void compensateOrderCreation(OrderEntity order) {
+        logger.info("Compensating order creation for order id: {}", order.getId());
+
+        try {
+            updateProducts(order.getOrderItemList(), +1);
+            deleteOrder(order.getId());
+        } catch (ProductServiceException e) {
+            logger.error("Error compensating product update for order {}: {}", order.getId(), e.getMessage());
+        } catch (OrderNotFoundException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -209,8 +229,7 @@ public class OrderServiceImplementation implements OrderService {
             return restTemplate.getForObject(url, Long.class);
         } catch (RestClientException e) {
 
-            if (e instanceof HttpStatusCodeException){
-                HttpStatusCodeException aux = (HttpStatusCodeException)e;
+            if (e instanceof HttpStatusCodeException aux){
                 throw new OrderException(Constants.USER_NOT_FOUND, (HttpStatus) aux.getStatusCode());
             } else {
                 throw new OrderException(Constants.COM_USR_PROD, HttpStatus.INTERNAL_SERVER_ERROR);
@@ -224,7 +243,7 @@ public class OrderServiceImplementation implements OrderService {
         logger.info("Changing status of order {} to {}", orderId, orderStatus);
         OrderEntity order = orderRepository.findById(orderId)
                 .orElseThrow(() -> {
-                    logger.error("Order not found: {}", orderId);
+                    logger.error(Constants.ORDER_NOT_FOUND_WITH_ID + "{}", orderId);
                     return new OrderException(Constants.ORDER_NOT_FOUND, HttpStatus.NOT_FOUND);
                 });
 
@@ -264,9 +283,7 @@ public class OrderServiceImplementation implements OrderService {
             }
         }
 
-        OrderToPdfDTO orderToPdfDTO = new OrderToPdfDTO(order.getId(), order.getUserId(), userMail, listProducts);
-
-        return orderToPdfDTO;
+        return new OrderToPdfDTO(order.getId(), order.getUserId(), userMail, listProducts);
     }
 
 
@@ -275,7 +292,7 @@ public class OrderServiceImplementation implements OrderService {
         logger.info("Attempting to delete order with ID: {}", id);
         orderRepository.findById(id)
                 .orElseThrow(() -> {
-                    logger.error("Order with ID {} not found", id);
+                    logger.error(Constants.ORDER_NOT_FOUND_WITH_ID + "{}", id);
                     return new OrderNotFoundException(Constants.ORDER_NOT_FOUND + id);
                 });
 
