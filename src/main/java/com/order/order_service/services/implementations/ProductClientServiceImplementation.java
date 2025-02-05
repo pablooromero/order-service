@@ -7,6 +7,7 @@ import com.order.order_service.models.OrderItem;
 import com.order.order_service.services.ProductClientService;
 import com.order.order_service.utils.Constants;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,7 +15,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
@@ -35,7 +35,10 @@ public class ProductClientServiceImplementation implements ProductClientService 
     @Value("${PRODUCT_SERVICE_URL}")
     private String PRODUCT_SERVICE_URL;
 
+    private Integer attempt = 0;
+
     @CircuitBreaker(name = "productBreaker", fallbackMethod = "getExistentProductsFallback")
+    @Retry(name = "productRetry", fallbackMethod = "getExistentProductsFallback")
     @Override
     public HashMap<Long,Integer> getExistentProducts(List<ProductQuantityRecord> productQuantityRecordList) throws OrderException {
         logger.info("Checking product availability for: {}", productQuantityRecordList);
@@ -55,12 +58,15 @@ public class ProductClientServiceImplementation implements ProductClientService 
     }
 
     public HashMap<Long, Integer> getExistentProductsFallback(List<ProductQuantityRecord> productQuantityRecordList, Throwable t) {
+        System.out.println("Attemps Existent Products: " + attempt);
+        attempt++;
         logger.error("Fallback triggered for getExistentProducts: {}", t.getMessage());
         throw new RuntimeException("Fallback triggered: " + t.getMessage());
     }
 
 
     @CircuitBreaker(name = "productBreaker", fallbackMethod = "updateProductsFallback")
+    @Retry(name = "productRetry", fallbackMethod = "updateProductsFallback")
     @Override
     public void updateProducts(List<OrderItem> orderItemList, int factor) throws ProductServiceException {
         logger.info("Updating product stock with factor: {}", factor);
@@ -75,12 +81,14 @@ public class ProductClientServiceImplementation implements ProductClientService 
         try {
             restTemplate.exchange(PRODUCT_SERVICE_URL + "/private/to-order", HttpMethod.PUT ,httpEntity, String.class);
         } catch(RestClientException e) {
-            logger.error(Constants.UPDATE_STOCK_ERROR + "ENTROOOOOO {}", e.getMessage());
+            logger.error(Constants.UPDATE_STOCK_ERROR + " {}", e.getMessage());
             throw new ProductServiceException(Constants.COM_ERR_PROD);
         }
     }
 
     public void updateProductsFallback(List<OrderItem> orderItemList, int factor, Throwable throwable) throws ProductServiceException {
+        System.out.println("Attemps Update Products: " + attempt);
+        attempt++;
         logger.error("Fallback triggered for updateProducts due to: {}", throwable.getMessage());
 
         throw new ProductServiceException("Fallback triggered: " + throwable.getMessage());
