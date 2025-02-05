@@ -11,6 +11,7 @@ import com.order.order_service.repositories.OrderItemRepository;
 import com.order.order_service.repositories.OrderRepository;
 import com.order.order_service.services.OrderItemService;
 import com.order.order_service.services.OrderService;
+import com.order.order_service.services.ProductClientService;
 import com.order.order_service.utils.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +38,9 @@ public class OrderItemServiceImplementation implements OrderItemService {
 
     @Autowired
     private OrderService orderService;
+
+    @Autowired
+    private ProductClientService productClientService;
 
     @Override
     public void saveOrderItem(OrderItem orderItem) {
@@ -85,7 +89,7 @@ public class OrderItemServiceImplementation implements OrderItemService {
         }
 
         List<ProductQuantityRecord> auxList = List.of(productQuantityRecord);
-        HashMap<Long, Integer> existentProductMap = orderService.getExistentProducts(auxList);
+        HashMap<Long, Integer> existentProductMap = productClientService.getExistentProducts(auxList);
 
         if (existentProductMap.containsKey(productQuantityRecord.id())) {
             Integer realQuantity = existentProductMap.get(productQuantityRecord.id());
@@ -95,7 +99,7 @@ public class OrderItemServiceImplementation implements OrderItemService {
                 List<OrderItem> orderItemList = List.of(orderItem);
 
                 try {
-                    orderService.updateProducts(orderItemList, -1);
+                    productClientService.updateProducts(orderItemList, -1);
                 } catch (ProductServiceException e) {
                     logger.error("Error updating products: {}", e.getMessage());
                     throw new OrderException(e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
@@ -147,14 +151,14 @@ public class OrderItemServiceImplementation implements OrderItemService {
         int difference = orderItem.getQuantity() - quantity;
 
         if (quantity > 0 && !Objects.equals(orderItem.getQuantity(), quantity)) {
-            HashMap<Long, Integer> existentProduct = orderService.getExistentProducts(List.of(new ProductQuantityRecord(orderItem.getProductId(), quantity)));
+            HashMap<Long, Integer> existentProduct = productClientService.getExistentProducts(List.of(new ProductQuantityRecord(orderItem.getProductId(), quantity)));
 
             try {
                 if (difference > 0) {
-                    orderService.updateProducts(List.of(new OrderItem(orderItem.getProductId(), difference, null)), 1);
+                    productClientService.updateProducts(List.of(new OrderItem(orderItem.getProductId(), difference, null)), 1);
                 } else {
                     if (existentProduct.get(orderItem.getProductId()) >= -1 * difference) {
-                        orderService.updateProducts(List.of(new OrderItem(orderItem.getProductId(), difference, null)), 1);
+                        productClientService.updateProducts(List.of(new OrderItem(orderItem.getProductId(), difference, null)), 1);
                     } else {
                         logger.warn("Insufficient stock for product ID: {}", orderItem.getProductId());
                         throw new OrderException(Constants.NEGATIVE_STOCK, HttpStatus.NOT_ACCEPTABLE);
@@ -189,7 +193,7 @@ public class OrderItemServiceImplementation implements OrderItemService {
         orderService.validateOrderOwner(userId, orderItem.getOrderEntity().getUserId());
         validOrderStatus(orderItem.getOrderEntity().getId());
 
-        orderService.updateProducts(List.of(orderItem), 1);
+        productClientService.updateProducts(List.of(orderItem), 1);
         orderItemRepository.delete(orderItem);
 
         logger.info("Successfully deleted order item ID: {}", orderItemId);

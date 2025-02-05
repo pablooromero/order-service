@@ -26,11 +26,7 @@ public interface OrderService {
 
     ResponseEntity<OrderCreatedRecord> createOrder(String email, NewOrderRecord newOrder) throws OrderException;
 
-    HashMap<Long,Integer> getExistentProducts(List<ProductQuantityRecord> productQuantityRecordList) throws OrderException;
-
     OrderItemListWrapper setOrderItemList(HashMap<Long, Integer> existentProducts, List<ProductQuantityRecord> wantedProducts, OrderEntity order);
-
-    void updateProducts(List<OrderItem> orderItemList, int factor) throws ProductServiceException;
 
     Long getUserIdFromEmail(String email) throws OrderException;
 

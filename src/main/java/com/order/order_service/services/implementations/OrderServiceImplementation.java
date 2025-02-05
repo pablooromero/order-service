@@ -12,7 +12,9 @@ import com.order.order_service.repositories.OrderItemRepository;
 import com.order.order_service.repositories.OrderRepository;
 import com.order.order_service.services.OrderService;
 import com.order.order_service.services.OutboxMessageService;
+import com.order.order_service.services.ProductClientService;
 import com.order.order_service.utils.Constants;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +44,9 @@ public class OrderServiceImplementation implements OrderService {
 
     @Autowired
     private OutboxMessageService outboxMessageService;
+
+    @Autowired
+    private ProductClientService productClientService;
 
     @Value("${USER_SERVICE_URL}")
     private String USER_SERVICE_URL;
@@ -118,7 +123,7 @@ public class OrderServiceImplementation implements OrderService {
         logger.info("Creating order for user with email: {}", email);
         Long userId = getUserIdFromEmail(email);
 
-        HashMap<Long,Integer> existentProductMap = getExistentProducts(newOrder.recordList());
+        HashMap<Long,Integer> existentProductMap = productClientService.getExistentProducts(newOrder.recordList());
 
         OrderEntityItemListWrapper orderEntityItemListWrapper = createOrderEntity(userId, existentProductMap, newOrder.recordList());
 
@@ -127,7 +132,7 @@ public class OrderServiceImplementation implements OrderService {
         List<ErrorProductRecord> orderItemsError = orderEntityItemListWrapper.getOrderItemListWrapper().getErrorProductRecordList();
 
         try {
-            updateProducts(orderItemList,-1);
+            productClientService.updateProducts(orderItemList,-1);
         } catch(ProductServiceException e){
             logger.error(Constants.UPDATE_STOCK_ERROR + "{}", e.getMessage());
 
@@ -142,23 +147,6 @@ public class OrderServiceImplementation implements OrderService {
 
     }
 
-    @Override
-    public HashMap<Long,Integer> getExistentProducts(List<ProductQuantityRecord> productQuantityRecordList) throws OrderException {
-        logger.info("Checking product availability for: {}", productQuantityRecordList);
-        ParameterizedTypeReference<HashMap<Long, Integer>> responseType =
-                new ParameterizedTypeReference<>() {};
-
-        HttpEntity<List<ProductQuantityRecord>> httpEntity = new HttpEntity<>(productQuantityRecordList);
-
-        try{
-            ResponseEntity<HashMap<Long, Integer>> responseEntity = restTemplate.exchange(PRODUCT_SERVICE_URL + "/private", HttpMethod.PUT, httpEntity, responseType);
-            System.out.println(PRODUCT_SERVICE_URL + "/private");
-            return responseEntity.getBody();
-        } catch(RestClientException e) {
-            logger.error(Constants.COM_ERR_PROD + "{}", e.getMessage());
-            throw new OrderException(Constants.COM_ERR_PROD, HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
 
     @Override
     public OrderItemListWrapper setOrderItemList(HashMap<Long, Integer> existentProducts, List<ProductQuantityRecord> wantedProducts, OrderEntity order) {
@@ -188,31 +176,13 @@ public class OrderServiceImplementation implements OrderService {
         return new OrderItemListWrapper(orderItemList, errorProductList);
     }
 
-    @Override
-    public void updateProducts(List<OrderItem> orderItemList, int factor) throws ProductServiceException {
-        logger.info("Updating product stock with factor: {}", factor);
-        List<ProductQuantityRecord> productQuantityRecordList = new ArrayList<>();
-
-        orderItemList.forEach(orderItem -> {
-            productQuantityRecordList.add(new ProductQuantityRecord(orderItem.getProductId(), factor * orderItem.getQuantity()));
-        });
-
-        HttpEntity<List<ProductQuantityRecord>> httpEntity = new HttpEntity<>(productQuantityRecordList);
-
-        try {
-            restTemplate.exchange(PRODUCT_SERVICE_URL + "/private/to-order", HttpMethod.PUT ,httpEntity, String.class);
-        } catch(RestClientException e) {
-            logger.error(Constants.UPDATE_STOCK_ERROR + "{}", e.getMessage());
-            throw new ProductServiceException(Constants.COM_ERR_PROD);
-        }
-    }
 
     @Transactional(rollbackFor = Exception.class)
     public void compensateOrderCreation(OrderEntity order) {
         logger.info("Compensating order creation for order id: {}", order.getId());
 
         try {
-            updateProducts(order.getOrderItemList(), +1);
+            productClientService.updateProducts(order.getOrderItemList(), +1);
             deleteOrder(order.getId());
         } catch (ProductServiceException e) {
             logger.error("Error compensating product update for order {}: {}", order.getId(), e.getMessage());
