@@ -7,6 +7,7 @@ import com.order.order_service.models.OrderItem;
 import com.order.order_service.services.ProductClientService;
 import com.order.order_service.utils.Constants;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import io.github.resilience4j.retry.annotation.Retry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +40,7 @@ public class ProductClientServiceImplementation implements ProductClientService 
 
     @CircuitBreaker(name = "productBreaker", fallbackMethod = "getExistentProductsFallback")
     @Retry(name = "productRetry", fallbackMethod = "getExistentProductsFallback")
+    @RateLimiter(name = "productRateLimiter", fallbackMethod = "getExistentProductsFallback")
     @Override
     public HashMap<Long,Integer> getExistentProducts(List<ProductQuantityRecord> productQuantityRecordList) throws OrderException {
         logger.info("Checking product availability for: {}", productQuantityRecordList);
@@ -61,12 +63,13 @@ public class ProductClientServiceImplementation implements ProductClientService 
         System.out.println("Attemps Existent Products: " + attempt);
         attempt++;
         logger.error("Fallback triggered for getExistentProducts: {}", t.getMessage());
-        throw new RuntimeException("Fallback triggered: " + t.getMessage());
+        throw new RuntimeException("Rate limit exceeded or service unavailable. Please try again later.");
     }
 
 
     @CircuitBreaker(name = "productBreaker", fallbackMethod = "updateProductsFallback")
     @Retry(name = "productRetry", fallbackMethod = "updateProductsFallback")
+    @RateLimiter(name = "productRateLimiter", fallbackMethod = "updateProductsFallback")
     @Override
     public void updateProducts(List<OrderItem> orderItemList, int factor) throws ProductServiceException {
         logger.info("Updating product stock with factor: {}", factor);
@@ -91,6 +94,6 @@ public class ProductClientServiceImplementation implements ProductClientService 
         attempt++;
         logger.error("Fallback triggered for updateProducts due to: {}", throwable.getMessage());
 
-        throw new ProductServiceException("Fallback triggered: " + throwable.getMessage());
+        throw new ProductServiceException("Rate limit exceeded or service unavailable. Please try again later.");
     }
 }
